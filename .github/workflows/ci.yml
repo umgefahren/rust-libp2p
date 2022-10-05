@@ -220,7 +220,7 @@ jobs:
     name: Run on Rust beta
     runs-on: ubuntu-latest
     needs: test-desktop
-    continue-on-error: ${{ matrix.toolchain == "nightly" }}
+    continue-on-error: ${{ matrix.toolchain == 'nightly' }}
     strategy:
       matrix:
         args: [
