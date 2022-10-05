@@ -214,3 +214,87 @@ jobs:
         echo "$FULL_FEATURE";
         
         test "$ALL_FEATURES" = "$FULL_FEATURE"
+
+  rust-beta-and-nightly:
+    name: Run on Rust beta
+    runs-on: ubuntu-latest
+    need: test-desktop
+    continue-on-error: ${{ matrix.toolchain == "nightly" }}
+    strategy:
+      matrix:
+        args: [
+          "--no-default-features",
+          "--all-features",
+          "--benches --all-features",
+        ]
+        toolchain: [
+          "beta",
+          "nightly"
+        ]
+    steps:
+    - name: Cancel Previous Runs
+      uses: styfle/cancel-workflow-action@bb6001c4ea612bf59c3abfc4756fbceee4f870c7 # 0.10.0
+      with:
+        access_token: ${{ github.token }}
+    
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+
+    - uses: actions/checkout@v3
+
+    - uses: Swatinem/rust-cache@6720f05bc48b77f96918929a9019fb2203ff71f8 # v2.0.0
+      with:
+        key: ${{ matrix.args }} ${{ matrix.toolchain }}
+
+    - name: Download toolchain
+      id: toolchain
+      run: rustup toolchain install ${{ matrix.toolchain }}
+
+    - name: Set default toolchain
+      run: rustup default ${{ matrix.toolchain }}
+    
+    - name: Run tests
+      run: cargo test --workspace ${{ matrix.args }}
+
+  rust-msrv:
+    name: Run on MSRV
+    runs-on: ubuntu-latest
+    need: test-desktop
+    strategy:
+      matrix:
+        args: [
+          "--no-default-features",
+          "--all-features",
+          "--benches --all-features",
+        ]
+    steps:
+    - name: Cancel Previous Runs
+      uses: styfle/cancel-workflow-action@bb6001c4ea612bf59c3abfc4756fbceee4f870c7 # 0.10.0
+      with:
+        access_token: ${{ github.token }}
+    
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+
+    - uses: actions/checkout@v3
+
+    - name: Get current MSRV from Cargo.toml
+      id: current_msrv
+      run: |
+        msrv=$(cat testcontainers/Cargo.toml | grep rust-version | sed 's/.* = "//; s/"//')
+        echo "::set-output name=msrv::$msrv"
+
+    - uses: Swatinem/rust-cache@6720f05bc48b77f96918929a9019fb2203ff71f8 # v2.0.0
+      with:
+        key: ${{ matrix.args }}
+    
+    - name: Download toolchain
+      id: toolchain
+      run: rustup toolchain install ${{ steps.current_msrv.outputs.msrv }}
+
+    - name: Set default toolchain
+      run: rustup default ${{ steps.current_msrv.outputs.msrv }}
+
+    - name: Run tests
+      run: cargo test --workspace ${{ matrix.args }}
+
