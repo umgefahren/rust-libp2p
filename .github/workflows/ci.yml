@@ -219,7 +219,7 @@ jobs:
   rust-beta-and-nightly:
     name: Run on Rust beta
     runs-on: ubuntu-latest
-    need: test-desktop
+    needs: test-desktop
     continue-on-error: ${{ matrix.toolchain == "nightly" }}
     strategy:
       matrix:
@@ -260,7 +260,7 @@ jobs:
   rust-msrv:
     name: Run on MSRV
     runs-on: ubuntu-latest
-    need: test-desktop
+    needs: test-desktop
     strategy:
       matrix:
         args: [
