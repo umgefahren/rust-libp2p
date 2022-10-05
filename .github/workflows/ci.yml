@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - master
+      - run-ci-on-multiple-rust-versions
 
 jobs:
   test-desktop:
