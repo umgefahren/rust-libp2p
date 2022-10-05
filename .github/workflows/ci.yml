@@ -279,7 +279,7 @@ jobs:
     - name: Get current MSRV from Cargo.toml
       id: current_msrv
       run: |
-        msrv=$(cat testcontainers/Cargo.toml | grep rust-version | sed 's/.* = "//; s/"//')
+        msrv=$(cat Cargo.toml | grep rust-version | sed 's/.* = "//; s/"//')
         echo "::set-output name=msrv::$msrv"
 
     - uses: Swatinem/rust-cache@6720f05bc48b77f96918929a9019fb2203ff71f8 # v2.0.0
