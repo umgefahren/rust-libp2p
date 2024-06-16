@@ -26,6 +26,7 @@ use super::{
 };
 use futures::FutureExt;
 use futures_timer::Delay;
+use instant::Instant;
 use libp2p_core::Multiaddr;
 use libp2p_identity::PeerId;
 use libp2p_request_response::{self as request_response, OutboundFailure, OutboundRequestId};
@@ -36,7 +37,6 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
-use web_time::Instant;
 
 /// Outbound probe failed or was aborted.
 #[derive(Debug)]
