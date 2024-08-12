@@ -21,6 +21,8 @@
 //! ECDSA keys with secp256r1 curve support.
 
 use super::error::DecodingError;
+use alloc::vec;
+use alloc::{borrow::ToOwned, vec::Vec};
 use core::cmp;
 use core::fmt;
 use core::hash;
@@ -44,9 +46,17 @@ pub struct Keypair {
 
 impl Keypair {
     /// Generate a new random ECDSA keypair.
-    #[cfg(feature = "rand")]
+    #[cfg(all(feature = "rand", feature = "std"))]
     pub fn generate() -> Keypair {
-        Keypair::from(SecretKey::generate())
+        Keypair::from_rng(rand::thread_rng())
+    }
+
+    #[cfg(feature = "rand")]
+    pub fn from_rng<R>(rng: R) -> Keypair
+    where
+        R: rand::RngCore + rand::CryptoRng,
+    {
+        Keypair::from(SecretKey::from_rng(rng))
     }
 
     /// Sign a message using the private key of this keypair.
@@ -94,9 +104,14 @@ pub struct SecretKey(SigningKey);
 
 impl SecretKey {
     /// Generate a new random ECDSA secret key.
-    #[cfg(feature = "rand")]
+    #[cfg(all(feature = "rand", feature = "std"))]
     pub fn generate() -> SecretKey {
         SecretKey(SigningKey::random(&mut rand::thread_rng()))
+    }
+
+    #[cfg(feature = "rand")]
+    pub fn from_rng<R: rand::RngCore + rand::CryptoRng>(mut rng: R) -> SecretKey {
+        SecretKey(SigningKey::random(&mut rng))
     }
 
     /// Sign a message with this secret key, producing a DER-encoded ECDSA signature.
@@ -114,7 +129,7 @@ impl SecretKey {
     /// Try to parse a secret key from a byte buffer containing raw scalar of the key.
     pub fn try_from_bytes(buf: impl AsRef<[u8]>) -> Result<SecretKey, DecodingError> {
         SigningKey::from_bytes(buf.as_ref().into())
-            .map_err(|err| DecodingError::failed_to_parse("ecdsa p256 secret key", err))
+            .map_err(|err| DecodingError::failed_to_parse_flex("ecdsa p256 secret key", err))
             .map(SecretKey)
     }
 
@@ -134,7 +149,7 @@ impl SecretKey {
                 buf.zeroize();
                 Ok(SecretKey(key))
             }
-            Err(e) => Err(DecodingError::failed_to_parse("ECDSA", e)),
+            Err(e) => Err(DecodingError::failed_to_parse_flex("ECDSA", e)),
         }
     }
 }
@@ -161,10 +176,10 @@ impl PublicKey {
     /// Try to parse a public key from a byte buffer containing raw components of a key with or without compression.
     pub fn try_from_bytes(k: &[u8]) -> Result<PublicKey, DecodingError> {
         let enc_pt = EncodedPoint::from_bytes(k)
-            .map_err(|e| DecodingError::failed_to_parse("ecdsa p256 encoded point", e))?;
+            .map_err(|e| DecodingError::failed_to_parse_flex("ecdsa p256 encoded point", e))?;
 
         VerifyingKey::from_encoded_point(&enc_pt)
-            .map_err(|err| DecodingError::failed_to_parse("ecdsa p256 public key", err))
+            .map_err(|err| DecodingError::failed_to_parse_flex("ecdsa p256 public key", err))
             .map(PublicKey)
     }
 
@@ -263,8 +278,6 @@ impl hash::Hash for PublicKey {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     #[cfg(feature = "rand")]
     fn sign_verify() {

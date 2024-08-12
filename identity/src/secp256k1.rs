@@ -21,6 +21,7 @@
 //! Secp256k1 keys.
 
 use super::error::DecodingError;
+use alloc::vec::Vec;
 use asn1_der::typed::{DerDecodable, Sequence};
 use core::cmp;
 use core::fmt;
@@ -38,9 +39,17 @@ pub struct Keypair {
 
 impl Keypair {
     /// Generate a new sec256k1 `Keypair`.
-    #[cfg(feature = "rand")]
+    #[cfg(all(feature = "rand", feature = "std"))]
     pub fn generate() -> Keypair {
-        Keypair::from(SecretKey::generate())
+        Self::from_rng(rand::thread_rng())
+    }
+
+    #[cfg(feature = "rand")]
+    pub fn from_rng<R>(rng: R) -> Keypair
+    where
+        R: rand::RngCore + rand::CryptoRng,
+    {
+        Keypair::from(SecretKey::from_rng(rng))
     }
 
     /// Get the public key of this keypair.
@@ -89,9 +98,17 @@ impl fmt::Debug for SecretKey {
 
 impl SecretKey {
     /// Generate a new random Secp256k1 secret key.
-    #[cfg(feature = "rand")]
+    #[cfg(all(feature = "rand", feature = "std"))]
     pub fn generate() -> SecretKey {
-        SecretKey(libsecp256k1::SecretKey::random(&mut rand::thread_rng()))
+        Self::from_rng(rand::thread_rng())
+    }
+
+    #[cfg(feature = "rand")]
+    pub fn from_rng<R>(mut rng: R) -> Self
+    where
+        R: rand::CryptoRng + rand::RngCore,
+    {
+        SecretKey(libsecp256k1::SecretKey::random(&mut rng))
     }
 
     /// Create a secret key from a byte slice, zeroing the slice on success.
@@ -102,7 +119,7 @@ impl SecretKey {
     pub fn try_from_bytes(mut sk: impl AsMut<[u8]>) -> Result<SecretKey, DecodingError> {
         let sk_bytes = sk.as_mut();
         let secret = libsecp256k1::SecretKey::parse_slice(&*sk_bytes)
-            .map_err(|e| DecodingError::failed_to_parse("parse secp256k1 secret key", e))?;
+            .map_err(|e| DecodingError::failed_to_parse_flex("parse secp256k1 secret key", e))?;
         sk_bytes.zeroize();
         Ok(SecretKey(secret))
     }
@@ -115,10 +132,26 @@ impl SecretKey {
         // TODO: Stricter parsing.
         let der_obj = der.as_mut();
 
-        let mut sk_bytes = Sequence::decode(der_obj)
+        struct Bytes(Vec<u8>);
+
+        impl<'a> asn1_der::typed::DerDecodable<'a> for Bytes {
+            fn load(object: asn1_der::DerObject<'a>) -> Result<Self, asn1_der::Asn1DerError> {
+                let octet_string = asn1_der::typed::OctetString::load(object)?;
+                Ok(Bytes(octet_string.get().to_vec()))
+            }
+        }
+
+        impl From<Bytes> for Vec<u8> {
+            fn from(Bytes(value): Bytes) -> Self {
+                value
+            }
+        }
+
+        let mut sk_bytes: Vec<u8> = Sequence::decode(der_obj)
             .and_then(|seq| seq.get(1))
-            .and_then(Vec::load)
-            .map_err(|e| DecodingError::failed_to_parse("secp256k1 SecretKey bytes", e))?;
+            .and_then(Bytes::load)
+            .map_err(|e| DecodingError::failed_to_parse_flex("secp256k1 SecretKey bytes", e))?
+            .into();
 
         let sk = SecretKey::try_from_bytes(&mut sk_bytes)?;
         sk_bytes.zeroize();
@@ -218,15 +251,13 @@ impl PublicKey {
     /// by `encode`.
     pub fn try_from_bytes(k: &[u8]) -> Result<PublicKey, DecodingError> {
         libsecp256k1::PublicKey::parse_slice(k, Some(libsecp256k1::PublicKeyFormat::Compressed))
-            .map_err(|e| DecodingError::failed_to_parse("secp256k1 public key", e))
+            .map_err(|e| DecodingError::failed_to_parse_flex("secp256k1 public key", e))
             .map(PublicKey)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     #[cfg(feature = "rand")]
     fn secp256k1_secret_from_bytes() {

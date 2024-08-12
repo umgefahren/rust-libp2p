@@ -18,10 +18,13 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use alloc::{string::String, vec::Vec};
+use core::{fmt, str::FromStr};
 #[cfg(feature = "rand")]
 use rand::Rng;
 use sha2::Digest as _;
-use std::{fmt, str::FromStr};
+
+#[cfg(feature = "std")]
 use thiserror::Error;
 
 /// Local type-alias for multihash.
@@ -102,17 +105,29 @@ impl PeerId {
     /// Generates a random peer ID from a cryptographically secure PRNG.
     ///
     /// This is useful for randomly walking on a DHT, or for testing purposes.
+    #[cfg(all(feature = "rand", feature = "std"))]
+    pub fn random() -> Self {
+        Self::from_rng(rand::thread_rng())
+    }
+
     #[cfg(feature = "rand")]
-    pub fn random() -> PeerId {
-        let peer_id = rand::thread_rng().gen::<[u8; 32]>();
-        PeerId {
+    pub fn from_rng<R: rand::RngCore + rand::CryptoRng>(mut rng: R) -> Self {
+        let peer_id = rng.gen::<[u8; 32]>();
+        Self {
             multihash: Multihash::wrap(0x0, &peer_id).expect("The digest size is never too large"),
         }
     }
 
     /// Returns a raw bytes representation of this `PeerId`.
     pub fn to_bytes(self) -> Vec<u8> {
-        self.multihash.to_bytes()
+        let length = self.multihash.size() as usize + 2;
+        let mut bytes = alloc::vec![0; length];
+        let written = self
+            .multihash
+            .write(&mut bytes[..])
+            .expect("writing to a vec should never fail");
+        debug_assert_eq!(written, bytes.len());
+        bytes
     }
 
     /// Returns a base-58 encoded string of this `PeerId`.
@@ -222,14 +237,29 @@ impl<'de> Deserialize<'de> for PeerId {
 }
 
 /// Error when parsing a [`PeerId`] from string or bytes.
-#[derive(Debug, Error)]
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(Error))]
 pub enum ParseError {
-    #[error("base-58 decode error: {0}")]
-    B58(#[from] bs58::decode::Error),
-    #[error("unsupported multihash code '{0}'")]
+    #[cfg_attr(feature = "std", error("base-58 decode error: {0}"))]
+    B58(#[cfg_attr(feature = "std", from)] bs58::decode::Error),
+    #[cfg_attr(feature = "std", error("unsupported multihash code '{0}'"))]
     UnsupportedCode(u64),
-    #[error("invalid multihash")]
-    InvalidMultihash(#[from] multihash::Error),
+    #[cfg_attr(feature = "std", error("invalid multihash"))]
+    InvalidMultihash(#[cfg_attr(feature = "std", from)] multihash::Error),
+}
+
+#[cfg(not(feature = "std"))]
+impl From<multihash::Error> for ParseError {
+    fn from(err: multihash::Error) -> Self {
+        ParseError::InvalidMultihash(err)
+    }
+}
+
+#[cfg(not(feature = "std"))]
+impl From<bs58::decode::Error> for ParseError {
+    fn from(err: bs58::decode::Error) -> Self {
+        ParseError::B58(err)
+    }
 }
 
 impl FromStr for PeerId {

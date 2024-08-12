@@ -21,6 +21,7 @@
 //! Ed25519 keys.
 
 use super::error::DecodingError;
+use alloc::vec::Vec;
 use core::cmp;
 use core::fmt;
 use core::hash;
@@ -33,9 +34,17 @@ pub struct Keypair(ed25519::SigningKey);
 
 impl Keypair {
     /// Generate a new random Ed25519 keypair.
-    #[cfg(feature = "rand")]
+    #[cfg(all(feature = "rand", feature = "std"))]
     pub fn generate() -> Keypair {
-        Keypair::from(SecretKey::generate())
+        Self::from_rng(rand::rngs::OsRng)
+    }
+
+    #[cfg(feature = "rand")]
+    pub fn from_rng<R>(rng: R) -> Keypair
+    where
+        R: rand::RngCore + rand::CryptoRng,
+    {
+        Keypair::from(SecretKey::from_rng(rng))
     }
 
     /// Convert the keypair into a byte array by concatenating the bytes
@@ -58,7 +67,7 @@ impl Keypair {
                 kp.zeroize();
                 Keypair(k)
             })
-            .map_err(|e| DecodingError::failed_to_parse("Ed25519 keypair", e))
+            .map_err(|e| DecodingError::failed_to_parse_flex("Ed25519 keypair", e))
     }
 
     /// Sign a message using the private key of this keypair.
@@ -157,7 +166,7 @@ impl PublicKey {
         let k = <[u8; 32]>::try_from(k)
             .map_err(|e| DecodingError::failed_to_parse("Ed25519 public key", e))?;
         ed25519::VerifyingKey::from_bytes(&k)
-            .map_err(|e| DecodingError::failed_to_parse("Ed25519 public key", e))
+            .map_err(|e| DecodingError::failed_to_parse_flex("Ed25519 public key", e))
             .map(PublicKey)
     }
 }
@@ -181,10 +190,18 @@ impl fmt::Debug for SecretKey {
 
 impl SecretKey {
     /// Generate a new Ed25519 secret key.
+    #[cfg(all(feature = "rand", feature = "std"))]
+    pub fn generate() -> Self {
+        Self::from_rng(rand::rngs::OsRng)
+    }
+
     #[cfg(feature = "rand")]
-    pub fn generate() -> SecretKey {
-        let signing = ed25519::SigningKey::generate(&mut rand::rngs::OsRng);
-        SecretKey(signing.to_bytes())
+    pub fn from_rng<R>(mut rng: R) -> Self
+    where
+        R: rand::RngCore + rand::CryptoRng,
+    {
+        let signing = ed25519::SigningKey::generate(&mut rng);
+        Self(signing.to_bytes())
     }
 
     /// Try to parse an Ed25519 secret key from a byte slice
@@ -206,9 +223,7 @@ impl SecretKey {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use quickcheck::*;
-
+    #[cfg(feature = "rand")]
     fn eq_keypairs(kp1: &Keypair, kp2: &Keypair) -> bool {
         kp1.public() == kp2.public() && kp1.0.to_bytes() == kp2.0.to_bytes()
     }

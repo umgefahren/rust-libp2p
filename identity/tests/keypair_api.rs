@@ -6,6 +6,15 @@ fn calling_keypair_api() {
 }
 
 #[allow(dead_code)]
+#[cfg(all(
+    any(
+        feature = "ecdsa",
+        feature = "secp256k1",
+        feature = "ed25519",
+        feature = "rsa"
+    ),
+    feature = "std"
+))]
 fn using_keypair(kp: Keypair) {
     let _ = kp.to_protobuf_encoding();
     let _ = kp.sign(&[]);

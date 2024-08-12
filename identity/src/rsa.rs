@@ -21,20 +21,34 @@
 //! RSA keys.
 
 use super::error::*;
+use alloc::{sync::Arc, vec, vec::Vec};
 use asn1_der::typed::{DerDecodable, DerEncodable, DerTypeView, Sequence};
-use asn1_der::{Asn1DerError, Asn1DerErrorVariant, DerObject, Sink, VecBacking};
+use asn1_der::{Asn1DerError, Asn1DerErrorVariant, DerObject, Sink};
+use core::fmt;
 use ring::rand::SystemRandom;
 use ring::signature::KeyPair;
 use ring::signature::{self, RsaKeyPair, RSA_PKCS1_2048_8192_SHA256, RSA_PKCS1_SHA256};
-use std::{fmt, sync::Arc};
 use zeroize::Zeroize;
+
+pub struct VecBacking<'a>(pub &'a mut Vec<u8>);
+impl<'a> Sink for VecBacking<'a> {
+    fn write(&mut self, e: u8) -> Result<(), Asn1DerError> {
+        self.0.push(e);
+        Ok(())
+    }
+}
+impl<'a> From<VecBacking<'a>> for &'a [u8] {
+    fn from(backing: VecBacking<'a>) -> &'a [u8] {
+        backing.0.as_slice()
+    }
+}
 
 /// An RSA keypair.
 #[derive(Clone)]
 pub struct Keypair(Arc<RsaKeyPair>);
 
-impl std::fmt::Debug for Keypair {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for Keypair {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.debug_struct("Keypair")
             .field("public", self.0.public_key())
             .finish()
@@ -113,7 +127,8 @@ impl PublicKey {
             subjectPublicKey: Asn1SubjectPublicKey(self.clone()),
         };
         let mut buf = Vec::new();
-        spki.encode(&mut buf)
+        let mut writer = VecBacking(&mut buf);
+        spki.encode(&mut writer)
             .map(|_| buf)
             .expect("RSA X.509 public key encoding failed.")
     }
@@ -122,7 +137,7 @@ impl PublicKey {
     /// structure. See also `encode_x509`.
     pub fn try_decode_x509(pk: &[u8]) -> Result<PublicKey, DecodingError> {
         Asn1SubjectPublicKeyInfo::decode(pk)
-            .map_err(|e| DecodingError::failed_to_parse("RSA X.509", e))
+            .map_err(|e| DecodingError::failed_to_parse_flex("RSA X.509", e))
             .map(|spki| spki.subjectPublicKey.0)
     }
 }
@@ -341,7 +356,8 @@ mod tests {
 
     #[test]
     fn rsa_x509_encode_decode() {
-        fn prop(SomeKeypair(kp): SomeKeypair) -> Result<bool, String> {
+        use alloc::string::ToString;
+        fn prop(SomeKeypair(kp): SomeKeypair) -> Result<bool, alloc::string::String> {
             let pk = kp.public();
             PublicKey::try_decode_x509(&pk.encode_x509())
                 .map_err(|e| e.to_string())

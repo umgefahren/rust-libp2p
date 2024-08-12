@@ -20,8 +20,15 @@
 
 //! Errors during identity key operations.
 
-use std::error::Error;
-use std::fmt;
+#[cfg(any(
+    feature = "ecdsa",
+    feature = "secp256k1",
+    feature = "ed25519",
+    feature = "rsa"
+))]
+use alloc::string::ToString;
+use alloc::{boxed::Box, format, string::String};
+use core::{error::Error, fmt};
 
 use crate::KeyType;
 
@@ -61,11 +68,53 @@ impl DecodingError {
         }
     }
 
-    #[cfg(any(
-        feature = "ecdsa",
-        feature = "secp256k1",
-        feature = "ed25519",
-        feature = "rsa"
+    #[cfg(all(
+        any(
+            feature = "ecdsa",
+            feature = "secp256k1",
+            feature = "ed25519",
+            feature = "rsa"
+        ),
+        not(feature = "std")
+    ))]
+    pub(crate) fn failed_to_parse_flex<E, S>(what: &'static str, source: S) -> Self
+    where
+        E: core::fmt::Display + core::fmt::Debug + Send + Sync + 'static,
+        S: Into<Option<E>>,
+    {
+        Self {
+            msg: format!("failed to parse {what}"),
+            source: match source.into() {
+                None => None,
+                Some(e) => Some(Box::new(DisplayError(e))),
+            },
+        }
+    }
+    #[cfg(all(
+        any(
+            feature = "ecdsa",
+            feature = "secp256k1",
+            feature = "ed25519",
+            feature = "rsa"
+        ),
+        feature = "std"
+    ))]
+    pub(crate) fn failed_to_parse_flex<E, S>(what: &'static str, source: S) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+        S: Into<Option<E>>,
+    {
+        Self::failed_to_parse(what, source)
+    }
+
+    #[cfg(all(
+        any(
+            feature = "ecdsa",
+            feature = "secp256k1",
+            feature = "ed25519",
+            feature = "rsa"
+        ),
+        feature = "std"
     ))]
     pub(crate) fn bad_protobuf(
         what: &'static str,
@@ -74,6 +123,25 @@ impl DecodingError {
         Self {
             msg: format!("failed to decode {what} from protobuf"),
             source: Some(Box::new(source)),
+        }
+    }
+
+    #[cfg(all(
+        any(
+            feature = "ecdsa",
+            feature = "secp256k1",
+            feature = "ed25519",
+            feature = "rsa"
+        ),
+        not(feature = "std")
+    ))]
+    pub(crate) fn bad_protobuf(
+        what: &'static str,
+        source: impl core::fmt::Debug + core::fmt::Display + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            msg: format!("failed to decode {what} from protobuf"),
+            source: Some(Box::new(DisplayError(source))),
         }
     }
 
@@ -159,3 +227,44 @@ impl fmt::Display for OtherVariantError {
 }
 
 impl Error for OtherVariantError {}
+
+#[derive(Debug)]
+#[cfg(all(
+    not(feature = "std"),
+    any(
+        feature = "ecdsa",
+        feature = "secp256k1",
+        feature = "ed25519",
+        feature = "rsa"
+    )
+))]
+struct DisplayError<E>(E);
+
+#[cfg(all(
+    not(feature = "std"),
+    any(
+        feature = "ecdsa",
+        feature = "secp256k1",
+        feature = "ed25519",
+        feature = "rsa"
+    )
+))]
+impl<E> core::fmt::Display for DisplayError<E>
+where
+    E: core::fmt::Display,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+#[cfg(all(
+    not(feature = "std"),
+    any(
+        feature = "ecdsa",
+        feature = "secp256k1",
+        feature = "ed25519",
+        feature = "rsa"
+    )
+))]
+impl<E> Error for DisplayError<E> where E: core::fmt::Display + core::fmt::Debug {}

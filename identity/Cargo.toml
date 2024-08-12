@@ -12,19 +12,21 @@ categories = ["cryptography"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-asn1_der = { version = "0.7.6", optional = true }
-bs58 = { version = "0.5.1", optional = true }
-ed25519-dalek = { version = "2.1", optional = true }
-hkdf = { version = "0.12.4", optional = true }
-libsecp256k1 = { version = "0.7.0", optional = true }
-tracing = { workspace = true }
-multihash = { version = "0.19.1", optional = true }
-p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std", "pem"], optional = true }
-quick-protobuf = "0.8.1"
-rand = { version = "0.8", optional = true }
+asn1_der = { version = "0.7.6", optional = true, default-features = false, features = ["native_types"] }
+bs58 = { version = "0.5.1", optional = true, default-features = false, features = ["alloc"] }
+ed25519-dalek = { version = "2.1", optional = true, default-features = false, features = ["fast",
+"zeroize"] }
+hkdf = { version = "0.12.4", optional = true, default-features = false }
+libsecp256k1 = { version = "0.7.0", optional = true, default-features = false, features = ["hmac",
+"static-context"] }
+tracing = { workspace = true, default-features = false, features = ["attributes"] }
+multihash = { version = "0.19.1", optional = true, default-features = false }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "pem"], optional = true }
+quick-protobuf = { version = "0.8.1", default-features = false }
+rand = { version = "0.8", optional = true, default-features = false, features = ["std_rng"] }
 sec1 = { version = "0.7", default-features = false, optional = true }
-serde = { version = "1", optional = true, features = ["derive"] }
-sha2 = { version = "0.10.8", optional = true }
+serde = { version = "1", optional = true, features = ["derive"], default-features = false }
+sha2 = { version = "0.10.8", optional = true, default-features = false }
 thiserror = { version = "1.0", optional = true }
 void = { version = "1.0", optional = true }
 zeroize = { version = "1.8", optional = true }
@@ -33,12 +35,16 @@ zeroize = { version = "1.8", optional = true }
 ring = { workspace = true, features = ["alloc", "std"], optional = true }
 
 [features]
+default = ["std"]
 secp256k1 = ["dep:libsecp256k1", "dep:asn1_der", "dep:sha2", "dep:hkdf", "dep:zeroize"]
 ecdsa = ["dep:p256", "dep:void", "dep:zeroize", "dep:sec1", "dep:sha2", "dep:hkdf"]
 rsa = ["dep:ring", "dep:asn1_der", "dep:rand", "dep:zeroize"]
 ed25519 = ["dep:ed25519-dalek", "dep:zeroize", "dep:sha2", "dep:hkdf"]
 peerid = ["dep:multihash", "dep:bs58", "dep:thiserror", "dep:sha2", "dep:hkdf"]
 rand = ["dep:rand", "ed25519-dalek?/rand_core"]
+std = ["asn1_der?/std", "bs58?/std", "ed25519-dalek?/std", "hkdf?/std", "libsecp256k1?/std",
+"tracing/std", "multihash?/std", "p256?/std", "quick-protobuf/std", "rand?/std", "serde?/std",
+"sha2?/std"]
 
 [dev-dependencies]
 quickcheck = { workspace = true }

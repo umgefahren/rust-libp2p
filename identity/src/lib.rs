@@ -35,6 +35,10 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(unreachable_pub)]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
+
 #[cfg(any(
     feature = "ecdsa",
     feature = "secp256k1",
@@ -123,8 +127,8 @@ pub enum KeyType {
     Ecdsa,
 }
 
-impl std::fmt::Display for KeyType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for KeyType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             KeyType::Ed25519 => f.write_str("Ed25519"),
             KeyType::RSA => f.write_str("RSA"),
