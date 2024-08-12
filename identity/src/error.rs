@@ -20,12 +20,7 @@
 
 //! Errors during identity key operations.
 
-#[cfg(any(
-    feature = "ecdsa",
-    feature = "secp256k1",
-    feature = "ed25519",
-    feature = "rsa"
-))]
+#[cfg(any(feature = "rsa"))]
 use alloc::string::ToString;
 use alloc::{boxed::Box, format, string::String};
 use core::{error::Error, fmt};
@@ -49,7 +44,7 @@ impl DecodingError {
     }
 
     #[cfg(any(
-        feature = "ecdsa",
+        all(feature = "ecdsa", feature = "std"),
         feature = "secp256k1",
         feature = "ed25519",
         feature = "rsa"
